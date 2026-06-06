@@ -164,7 +164,7 @@ data class DetailScreen(val deviceMacAddress: String) : Screen {
                 // 4. GATT Services & Characteristics
                 item {
                     Text(
-                        text = "DISCOVERED GATT SERVICES",
+                        text = "SERVICES & CHARACTERISTICS",
                         color = KineticTextSecondary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -287,14 +287,14 @@ fun ConnectionStatsCard(
 
                 Column {
                     Text(
-                        text = if (isConnected) "CONNECTED" else "GETTING LINK PROTOCOLS...",
+                        text = if (isConnected) "CONNECTED" else "CONNECTING...",
                         color = if (isConnected) KineticAccentGreen else Color(0xFFFF5F57),
                         fontWeight = FontWeight.Black,
                         fontSize = 13.sp,
                         letterSpacing = 0.5.sp
                     )
                     Text(
-                        text = if (isConnected) "Active Telemetry diagnostics streaming" else "Binding hardware RF descriptors",
+                        text = if (isConnected) "Connected to GATT Server" else "Reading BLE services...",
                         color = KineticTextSecondary,
                         fontSize = 11.sp
                     )
@@ -332,7 +332,7 @@ fun RssiSignalPathGraph(
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Text(
-                text = "ANTENNA GAIN HISTORY (REAL-TIME)",
+                text = "SIGNAL STRENGTH HISTORY",
                 color = KineticTextSecondary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 10.sp,
@@ -443,7 +443,7 @@ fun NotesPersistenceCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "PERSONALIZED TAGS & SYSTEM NOTES",
+                text = "DEVICE ALIAS & NOTES",
                 color = KineticTextPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 11.sp,
@@ -455,7 +455,7 @@ fun NotesPersistenceCard(
             OutlinedTextField(
                 value = customName,
                 onValueChange = onNameChange,
-                label = { Text("Display Name/Alias") },
+                label = { Text("Device Alias / Custom Name") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -507,7 +507,7 @@ fun NotesPersistenceCard(
             OutlinedTextField(
                 value = notes,
                 onValueChange = onNotesChange,
-                label = { Text("Engineering comments / custom notes...") },
+                label = { Text("Add comments or descriptions...") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(80.dp),
@@ -540,7 +540,7 @@ fun NotesPersistenceCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("SAVE NOTES", fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.5.sp)
+                        Text("SAVE ALIAS", fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.5.sp)
                     }
                 }
 
@@ -559,7 +559,7 @@ fun NotesPersistenceCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("CLEAR NOTES", fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.5.sp)
+                        Text("CLEAR", fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.5.sp)
                     }
                 }
             }

@@ -23,9 +23,10 @@ val appModule = module {
 
     // Dao
     single { get<AppDatabase>().deviceBookmarkDao() }
+    single { get<AppDatabase>().attendanceRecordDao() }
 
     // Repository
-    single { DeviceRepository(get()) }
+    single { DeviceRepository(get(), get()) }
 
     // Prefs
     single { ScanPreferences(androidContext()) }

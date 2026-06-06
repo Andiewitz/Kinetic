@@ -6,6 +6,7 @@ import com.example.ble.BleDevice
 import com.example.ble.BleManager
 import com.example.data.datastore.ScanPreferences
 import com.example.data.db.DeviceBookmark
+import com.example.data.db.AttendanceRecord
 import com.example.data.repository.DeviceRepository
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -21,10 +22,13 @@ data class HomeState(
     val rawDevices: List<BleDevice> = emptyList(),
     val filteredDevices: List<BleDevice> = emptyList(),
     val isScanning: Boolean = false,
+    val isAdvertising: Boolean = false,
     val rssiFilter: Int = -100,
     val showUnidentified: Boolean = true,
     val searchQuery: String = "",
-    val bookmarks: List<DeviceBookmark> = emptyList()
+    val bookmarks: List<DeviceBookmark> = emptyList(),
+    val attendanceRecords: List<AttendanceRecord> = emptyList(),
+    val selectedTab: Int = 0 // 0: Receiver (Scanner), 1: Sender (Broadcaster), 2: Attendance Logs
 )
 
 sealed interface HomeSideEffect {
@@ -42,6 +46,7 @@ class HomeViewModel(
 
     init {
         observePrefsAndData()
+        listenToAttendanceSignals()
     }
 
     private fun observePrefsAndData() = intent {
@@ -53,10 +58,23 @@ class HomeViewModel(
             }
         }
 
+        // Collect Attendance logs from Room DB
+        viewModelScope.launch {
+            deviceRepository.allRecords.collectLatest { recordsList ->
+                reduce { state.copy(attendanceRecords = recordsList) }
+            }
+        }
+
         // Collect Devices from BLE manager & state of scanning
         viewModelScope.launch {
             bleManager.isScanning.collectLatest { isScanning ->
                 reduce { state.copy(isScanning = isScanning) }
+            }
+        }
+
+        viewModelScope.launch {
+            bleManager.isAdvertising.collectLatest { isAdvertising ->
+                reduce { state.copy(isAdvertising = isAdvertising) }
             }
         }
 
@@ -81,14 +99,68 @@ class HomeViewModel(
         }
     }
 
+    private fun listenToAttendanceSignals() {
+        viewModelScope.launch {
+            bleManager.detectedAttendance.collect { record ->
+                deviceRepository.addAttendanceRecord(
+                    name = record.studentName,
+                    studentId = record.studentId,
+                    deviceName = record.deviceName,
+                    mac = record.macAddress,
+                    status = record.status,
+                    bytesHex = record.payloadBytesHex
+                )
+                intent {
+                    postSideEffect(HomeSideEffect.ShowToast("Checked in: ${record.studentName} (${record.studentId})"))
+                }
+            }
+        }
+    }
+
+    fun setSelectedTab(tab: Int) = intent {
+        reduce { state.copy(selectedTab = tab) }
+    }
+
     fun startScanning() = intent {
         bleManager.startScan()
-        postSideEffect(HomeSideEffect.ShowToast("Bluetooth scan initiated"))
+        postSideEffect(HomeSideEffect.ShowToast("BLE Attendance Scanner listening"))
     }
 
     fun stopScanning() = intent {
         bleManager.stopScan()
-        postSideEffect(HomeSideEffect.ShowToast("Bluetooth scan stopped"))
+        postSideEffect(HomeSideEffect.ShowToast("Scanner offline"))
+    }
+
+    fun startAdvertising(studentName: String, studentId: String, status: String) = intent {
+        if (studentName.isBlank() || studentId.isBlank()) {
+            postSideEffect(HomeSideEffect.ShowToast("Please enter a valid Student Name and ID"))
+            return@intent
+        }
+        bleManager.startAdvertising(studentName, studentId, status)
+        postSideEffect(HomeSideEffect.ShowToast("Starting beacon broadcast..."))
+    }
+
+    fun stopAdvertising() = intent {
+        bleManager.stopAdvertising()
+        postSideEffect(HomeSideEffect.ShowToast("Beacon broadcast turned off"))
+    }
+
+    fun simulateStudentCheckIn(device: BleDevice, id: String, name: String, status: String) = intent {
+        bleManager.simulateDirectCheckIn(device, id, name, status)
+    }
+
+    fun clearAllAttendanceLogs() = intent {
+        viewModelScope.launch {
+            deviceRepository.clearAllAttendanceRecords()
+        }
+        postSideEffect(HomeSideEffect.ShowToast("All logs flushed from safe database"))
+    }
+
+    fun deleteAttendanceLog(id: Long) = intent {
+        viewModelScope.launch {
+            deviceRepository.deleteAttendanceRecord(id)
+        }
+        postSideEffect(HomeSideEffect.ShowToast("Deleted log item"))
     }
 
     fun updateSearchQuery(query: String) = intent {
@@ -108,7 +180,7 @@ class HomeViewModel(
         val searchLower = state.searchQuery.lowercase()
         val filtered = state.rawDevices.filter { device ->
             val matchesRssi = device.rssi >= state.rssiFilter
-            val matchesUnidentified = state.showUnidentified || device.name != "Unknown"
+            val matchesUnidentified = state.showUnidentified || (device.name != "Unknown" && !device.name.contains("Unknown"))
             val matchesSearch = device.name.lowercase().contains(searchLower) ||
                     device.macAddress.lowercase().contains(searchLower)
 
@@ -119,11 +191,11 @@ class HomeViewModel(
 
     fun saveBookmark(mac: String, customName: String, notes: String, category: String) = intent {
         deviceRepository.saveBookmark(mac, customName, notes, category)
-        postSideEffect(HomeSideEffect.ShowToast("Saved settings for $customName"))
+        postSideEffect(HomeSideEffect.ShowToast("Registered alias for $customName"))
     }
 
     fun deleteBookmark(mac: String) = intent {
         deviceRepository.removeBookmark(mac)
-        postSideEffect(HomeSideEffect.ShowToast("Cleared notes/tags successfully"))
+        postSideEffect(HomeSideEffect.ShowToast("Cleared device configuration"))
     }
 }
