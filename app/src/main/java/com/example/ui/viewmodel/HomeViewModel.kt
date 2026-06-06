@@ -145,10 +145,6 @@ class HomeViewModel(
         postSideEffect(HomeSideEffect.ShowToast("Beacon broadcast turned off"))
     }
 
-    fun simulateStudentCheckIn(device: BleDevice, id: String, name: String, status: String) = intent {
-        bleManager.simulateDirectCheckIn(device, id, name, status)
-    }
-
     fun clearAllAttendanceLogs() = intent {
         viewModelScope.launch {
             deviceRepository.clearAllAttendanceRecords()

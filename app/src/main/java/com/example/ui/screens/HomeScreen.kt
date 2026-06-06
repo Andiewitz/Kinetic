@@ -339,85 +339,6 @@ fun ScannerTab(
             )
         }
 
-        // Mock Testing Board for Single-Device Flow
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = KineticGlassMd),
-                border = BorderStroke(1.dp, KineticAccentBlue.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(22.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(KineticAccentBlue)
-                        )
-                        Text(
-                            text = "SIMULATE STUDENT CHECK-IN",
-                            color = KineticTextPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Simulate mock student beacons checking in to test the automatic Room database attendance log system.",
-                        color = KineticTextSecondary,
-                        fontSize = 11.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val testClassmates = listOf(
-                        Triple("Alice Smith", "1002", "Present"),
-                        Triple("Michael Vance", "1019", "Late"),
-                        Triple("Elena Rostova", "1044", "Present")
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        testClassmates.forEach { (name, id, status) ->
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(KineticSurfaceGhost)
-                                    .border(1.dp, KineticBorderSoft, RoundedCornerShape(10.dp))
-                                    .clickable {
-                                        val mockDevice = BleDevice(
-                                            name = "$name (Student)",
-                                            macAddress = "E5:31:AA:88:00:$id",
-                                            rssi = -42,
-                                            isConnectable = true,
-                                            category = "Student ID: $id",
-                                            services = listOf("ffe0")
-                                        )
-                                        viewModel.simulateStudentCheckIn(mockDevice, id, name, status)
-                                    }
-                                    .padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(text = name.substringBefore(" "), color = KineticTextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(text = "ID $id", color = KineticAccentBlue, fontSize = 9.sp, fontWeight = FontWeight.Medium)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // Discovered Peer Section
         item {
             Text(
@@ -835,7 +756,7 @@ fun AttendanceLogsTab(
                             fontSize = 13.sp
                         )
                         Text(
-                            text = "Turn on the scanner to search for nearby student beacons or use the test check-in simulator to record logs.",
+                            text = "Turn on scanning to search for broadcasting student beacons nearby.",
                             color = KineticTextSecondary,
                             fontSize = 11.sp,
                             modifier = Modifier.padding(horizontal = 14.dp).align(Alignment.CenterHorizontally)

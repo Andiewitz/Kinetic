@@ -55,15 +55,6 @@ class BleManager(private val context: Context) {
     private var mockRssiJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Default + Job())
 
-    // Mock student templates that scan can locate (representing local devices/classmates)
-    private val mockBaseDevices = listOf(
-        BleDevice("Alex Rivera (Student)", "B4:4B:D2:12:34:56", -55, isConnectable = true, category = "Student ID: 1004", txPower = -58, services = listOf("ffe0")),
-        BleDevice("Zoe Chen (Student)", "C0:31:AA:FF:88:99", -68, isConnectable = true, category = "Student ID: 1007", txPower = -59, services = listOf("ffe0")),
-        BleDevice("Marcus Vance (Student)", "FF:EE:DD:AA:B1:C2", -71, isConnectable = true, category = "Student ID: 1012", txPower = -55, services = listOf("ffe0")),
-        BleDevice("Aura Sound Pod", "34:A4:E3:D8:C0:09", -82, isConnectable = false, category = "Audio Link", txPower = -61, services = listOf("180F", "180A")),
-        BleDevice("Main Hall Transmitter", "48:5F:99:11:AA:C2", -89, isConnectable = false, category = "Infrastructure", txPower = -57, services = listOf("180F"))
-    )
-
     init {
         try {
             val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
@@ -85,7 +76,10 @@ class BleManager(private val context: Context) {
         _isScanning.value = true
         Log.d(tag, "Scanning started")
 
-        // 1. Setup real BLE Scan if possible
+        // Start scanning with a completely fresh, empty list of detected real hardware
+        _scannedDevices.value = emptyMap()
+
+        // Setup real BLE Scan if possible
         try {
             if (bluetoothLeScanner != null) {
                 val filters = listOf(
@@ -103,34 +97,12 @@ class BleManager(private val context: Context) {
         } catch (e: Exception) {
             Log.w(tag, "Could not start real BLE scan (missing permissions or BLE disabled): ${e.message}")
         }
-
-        // Initialize virtual devices for instant browser testing
-        _scannedDevices.value = mockBaseDevices.associateBy { it.macAddress }
-
-        // 2. Start simulation loop for background updates & RSSI fluctuations
-        scanJob = scope.launch {
-            while (_isScanning.value) {
-                delay(1500)
-
-                // Perturb RSSI and signal values
-                _scannedDevices.update { currentMap ->
-                    currentMap.mapValues { (_, device) ->
-                        val connected = _connectedDevice.value?.macAddress == device.macAddress
-                        val change = if (connected) Random.nextInt(-1, 2) else Random.nextInt(-4, 5)
-                        val newRssi = (device.rssi + change).coerceIn(-95, -30)
-                        val history = (device.signalHistory + newRssi).takeLast(10)
-                        device.copy(rssi = newRssi, signalHistory = history)
-                    }
-                }
-            }
-        }
     }
 
     @SuppressLint("MissingPermission")
     fun stopScan() {
         if (!_isScanning.value) return
         _isScanning.value = false
-        scanJob?.cancel()
 
         try {
             if (bluetoothLeScanner != null) {
@@ -328,31 +300,138 @@ class BleManager(private val context: Context) {
         }
     }
 
-    // --- EXCHANGING BYTES AND TESTING FLOWS ---
+    // --- EXCHANGING BYTES AND REAL BLE CONNECTIONS ---
 
-    /**
-     * Triggers a direct simulated bite receipt from a virtual peripheral
-     */
-    fun simulateDirectCheckIn(vDevice: BleDevice, id: String, name: String, status: String) {
-        scope.launch {
-            val servicePayload = "$id;$name;$status"
-            val payloadBytes = servicePayload.toByteArray(Charsets.UTF_8)
-            val record = AttendanceRecord(
-                studentName = name,
-                studentId = id,
-                deviceName = vDevice.name,
-                macAddress = vDevice.macAddress,
-                payloadBytesHex = bytesToHex(payloadBytes),
-                status = status
-            )
-            delay(800) // simulated handshake lag
-            _detectedAttendance.emit(record)
+    private var activeGatt: BluetoothGatt? = null
+
+    private val clientGattCallback = object : BluetoothGattCallback() {
+        @SuppressLint("MissingPermission")
+        override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+            super.onConnectionStateChange(gatt, status, newState)
+            Log.d(tag, "Client connection state change: status $status, state $newState")
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+                Log.d(tag, "Connected to remote GATT server. Discovering services...")
+                gatt?.discoverServices()
+                
+                val address = gatt?.device?.address ?: ""
+                _scannedDevices.update { current ->
+                    current.mapValues { (_, d) ->
+                        if (d.macAddress == address) d.copy(isConnected = true) else d
+                    }
+                }
+                _connectedDevice.value?.let { currentConnected ->
+                    if (currentConnected.macAddress == address) {
+                        _connectedDevice.value = currentConnected.copy(isConnected = true)
+                    }
+                }
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                Log.d(tag, "Disconnected from remote GATT server")
+                val address = gatt?.device?.address ?: ""
+                _connectedDevice.value?.let { currentConnected ->
+                    if (currentConnected.macAddress == address) {
+                        disconnectDevice()
+                    }
+                }
+            }
+        }
+
+        @SuppressLint("MissingPermission")
+        override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+            super.onServicesDiscovered(gatt, status)
+            if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
+                Log.d(tag, "GATT Services discovered successfully")
+                val discovered = mutableListOf<com.example.ble.GattService>()
+                
+                for (service in gatt.services) {
+                    val sUuid = service.uuid.toString().uppercase()
+                    
+                    val sName = when {
+                        sUuid.startsWith("0000FFE0") -> "Attendance Verification (0xFFE0)"
+                        sUuid.startsWith("0000180F") -> "Battery Service (0x180F)"
+                        sUuid.startsWith("0000180A") -> "Device Information (0x180A)"
+                        sUuid.startsWith("0000180D") -> "Heart Rate (0x180D)"
+                        else -> "Service: ${sUuid.substring(0, 8)}"
+                    }
+
+                    val characteristicsList = mutableListOf<com.example.ble.GattCharacteristic>()
+                    for (char in service.characteristics) {
+                        val cUuid = char.uuid.toString().uppercase()
+                        val cName = "Characteristic: ${cUuid.substring(0, 8)}"
+                        
+                        var cValue = "No read permission"
+                        if ((char.properties and BluetoothGattCharacteristic.PROPERTY_READ) != 0) {
+                            cValue = "Read Available"
+                            gatt.readCharacteristic(char)
+                        }
+                        
+                        characteristicsList.add(com.example.ble.GattCharacteristic(cName, cValue))
+                    }
+                    
+                    discovered.add(com.example.ble.GattService(sName, characteristicsList))
+                }
+                
+                _gattServicesAndCharacteristics.value = discovered
+            }
+        }
+
+        @SuppressLint("MissingPermission")
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray,
+            status: Int
+        ) {
+            super.onCharacteristicRead(gatt, characteristic, value, status)
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                val cUuid = characteristic.uuid.toString().uppercase()
+                val decodedString = String(value, Charsets.UTF_8)
+                Log.d(tag, "Read Characteristic $cUuid value: $decodedString")
+                
+                _gattServicesAndCharacteristics.update { currentServices ->
+                    currentServices.map { service ->
+                        val updatedChars = service.characteristics.map { c ->
+                            if (c.uuidName.contains(cUuid.substring(0, 8))) {
+                                c.copy(value = decodedString)
+                            } else {
+                                c
+                            }
+                        }
+                        service.copy(characteristics = updatedChars)
+                    }
+                }
+            }
+        }
+
+        @Deprecated("Deprecated in Java")
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?,
+            status: Int
+        ) {
+            @Suppress("DEPRECATION")
+            super.onCharacteristicRead(gatt, characteristic, status)
+            if (status == BluetoothGatt.GATT_SUCCESS && characteristic != null) {
+                val value = characteristic.value ?: byteArrayOf()
+                val cUuid = characteristic.uuid.toString().uppercase()
+                val decodedString = String(value, Charsets.UTF_8)
+                
+                _gattServicesAndCharacteristics.update { currentServices ->
+                    currentServices.map { service ->
+                        val updatedChars = service.characteristics.map { c ->
+                            if (c.uuidName.contains(cUuid.substring(0, 8))) {
+                                c.copy(value = decodedString)
+                            } else {
+                                c
+                            }
+                        }
+                        service.copy(characteristics = updatedChars)
+                    }
+                }
+            }
         }
     }
 
-    /**
-     * Connects to a device and performs the real or simulated direct bytes handshake
-     */
+    @SuppressLint("MissingPermission")
     fun connectDevice(device: BleDevice) {
         scope.launch {
             _scannedDevices.update { current ->
@@ -363,70 +442,39 @@ class BleManager(private val context: Context) {
             _connectedDevice.value = device.copy(isConnected = true)
             Log.d(tag, "Handshaking with ${device.name}")
 
-            _gattServicesAndCharacteristics.value = listOf(GattService("Establishing RF Link...", emptyList()))
-            delay(1000)
+            _gattServicesAndCharacteristics.value = listOf(com.example.ble.GattService("Establishing RF Link...", emptyList()))
 
-            // Feed services
-            val services = mutableListOf(
-                GattService(
-                    name = "Attendance Verification Protocol (0xFFE0)",
-                    characteristics = listOf(
-                        GattCharacteristic("Check-In State Characteristics", "Tx: Handshaking bytes")
-                    )
-                )
-            )
-            _gattServicesAndCharacteristics.value = services
+            try {
+                // Disconnect any active GATT
+                activeGatt?.disconnect()
+                activeGatt?.close()
+                activeGatt = null
 
-            // If it is a virtual student, let's complete a simulated write check-in of student parameters
-            if (device.name.contains("(Student)")) {
-                // Determine ID parameter from custom category
-                val studentId = device.category.removePrefix("Student ID: ").trim().ifEmpty { "N/A" }
-                val studentName = device.name.removeSuffix(" (Student)")
-                val payloadString = "$studentId;$studentName;Present"
-                val responseBytes = payloadString.toByteArray(Charsets.UTF_8)
-
-                delay(1200)
+                val remoteDevice = bluetoothAdapter?.getRemoteDevice(device.macAddress)
+                activeGatt = remoteDevice?.connectGatt(context, false, clientGattCallback)
+            } catch (e: Exception) {
+                Log.e(tag, "Error initiating real connectGatt connection: ${e.message}")
                 _gattServicesAndCharacteristics.value = listOf(
-                    GattService(
-                        name = "Attendance Verification Protocol (0xFFE0)",
-                        characteristics = listOf(
-                            GattCharacteristic("Payload Hex Bytes Received", bytesToHex(responseBytes)),
-                            GattCharacteristic("Verified Student Name", studentName),
-                            GattCharacteristic("Verified ID Card", studentId),
-                            GattCharacteristic("Verification Stamp", "APPROVED")
-                        )
-                    )
-                )
-
-                _detectedAttendance.emit(
-                    AttendanceRecord(
-                        studentName = studentName,
-                        studentId = studentId,
-                        deviceName = device.name,
-                        macAddress = device.macAddress,
-                        payloadBytesHex = bytesToHex(responseBytes),
-                        status = "Checked-in via BLE"
-                    )
-                )
-            } else {
-                // Standard random characteristics
-                delay(800)
-                _gattServicesAndCharacteristics.value = listOf(
-                    GattService(
-                        name = "Custom Device Information",
-                        characteristics = listOf(
-                            GattCharacteristic("Mac Address Link", device.macAddress),
-                            GattCharacteristic("Chirp Payload", "No attendance structure found")
-                        )
-                    )
+                    com.example.ble.GattService("Connection Error", listOf(
+                        com.example.ble.GattCharacteristic("Error Message", e.message ?: "Failed to initiate link")
+                    ))
                 )
             }
         }
     }
 
+    @SuppressLint("MissingPermission")
     fun disconnectDevice() {
         val currentConnected = _connectedDevice.value ?: return
         scope.launch {
+            try {
+                activeGatt?.disconnect()
+                activeGatt?.close()
+                activeGatt = null
+            } catch (e: Exception) {
+                Log.e(tag, "Error closing GATT link: ${e.message}")
+            }
+
             _scannedDevices.update { current ->
                 current.mapValues { (_, d) ->
                     if (d.macAddress == currentConnected.macAddress) d.copy(isConnected = false) else d
