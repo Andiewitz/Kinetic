@@ -29,7 +29,6 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.example.ble.BleDevice
-import com.example.ui.components.BleRadar
 import com.example.ui.components.headless.HeadlessSlider
 import com.example.ui.viewmodel.HomeSideEffect
 import com.example.ui.viewmodel.HomeState
@@ -264,10 +263,10 @@ fun ScannerTab(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Control Card
+        // Control Card (Bento Section 1)
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = KineticGlassBase),
                 border = BorderStroke(1.dp, KineticBorderSoft)
@@ -279,13 +278,13 @@ fun ScannerTab(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "BLE Scanner is ${if (state.isScanning) "active" else "offline"}",
+                            text = if (state.isScanning) "Searching for signals" else "Scanner is off",
                             color = if (state.isScanning) KineticAccentGreen else KineticTextSecondary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            fontSize = 14.sp
                         )
                         Text(
-                            text = if (state.isScanning) "Scanning for nearby student beacons..." else "Start scanning to record check-ins",
+                            text = if (state.isScanning) "Listening for nearby student signals..." else "Turn on scanner to search",
                             color = KineticTextSecondary,
                             fontSize = 11.sp
                         )
@@ -306,7 +305,7 @@ fun ScannerTab(
                         )
                     ) {
                         Text(
-                            text = if (state.isScanning) "STOP SCAN" else "START SCAN",
+                            text = if (state.isScanning) "STOP" else "START",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -315,34 +314,43 @@ fun ScannerTab(
             }
         }
 
-        // Radar Visualizer
+        // Search & Filter (Bento Section 2)
         item {
-            BleRadar(
-                isScanning = state.isScanning,
-                devices = state.filteredDevices,
-                onDeviceClick = onNavigateDetail
-            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = KineticGlassBase),
+                border = BorderStroke(1.dp, KineticBorderSoft)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "FIND & FILTER",
+                        color = KineticTextPrimary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    SearchBar(
+                        query = state.searchQuery,
+                        onQueryChange = { viewModel.updateSearchQuery(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    RssiFilterControl(
+                        rssiFilter = state.rssiFilter,
+                        onRssiChange = { viewModel.updateRssiFilter(it) }
+                    )
+                }
+            }
         }
 
-        // Search Bar & Filter Options
-        item {
-            SearchBar(
-                query = state.searchQuery,
-                onQueryChange = { viewModel.updateSearchQuery(it) }
-            )
-        }
-
-        item {
-            RssiFilterControl(
-                rssiFilter = state.rssiFilter,
-                onRssiChange = { viewModel.updateRssiFilter(it) }
-            )
-        }
-
-        // Discovered Peer Section
+        // Discovered Peer Section (Bento Section 3)
         item {
             Text(
-                text = "DISCOVERED DEVICES (${state.filteredDevices.size})",
+                text = "FOUND SIGNALS (${state.filteredDevices.size})",
                 color = KineticTextSecondary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 11.sp,
@@ -382,87 +390,62 @@ fun BroadcasterTab(
     var studentIdInput by remember { mutableStateOf("10842") }
     var selectedStatus by remember { mutableStateOf("Present") }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "BroadcasterPulse")
-    val pulseGlowScale by if (state.isAdvertising) {
-        infiniteTransition.animateFloat(
-            initialValue = 1.0f,
-            targetValue = 11.2f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1400, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "GlowScale"
-        )
-    } else {
-        remember { mutableStateOf(1.0f) }
-    }
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Pulse wave element at top
+        // Bento Section 1: Connection/Broadcast Simple Status Card (Replaces the glowing radar/pulse)
         item {
-            Box(
-                modifier = Modifier
-                    .padding(vertical = 24.dp)
-                    .size(200.dp),
-                contentAlignment = Alignment.Center
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = KineticGlassBase),
+                border = BorderStroke(1.dp, KineticBorderSoft)
             ) {
-                // Expanding Beacon Signal Glow
-                if (state.isAdvertising) {
-                    Box(
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
-                            .background(
-                                androidx.compose.ui.graphics.Brush.radialGradient(
-                                    colors = listOf(
-                                        KineticAccentBlue.copy(alpha = 0.22f / pulseGlowScale),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                    )
-                }
-
-                // Core Beacon Widget
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(if (state.isAdvertising) KineticAccentBlueTint else KineticSurfaceGhost)
-                        .border(
-                            1.dp,
-                            if (state.isAdvertising) KineticAccentBlue else KineticBorderSoft,
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Bluetooth,
-                            contentDescription = "Beacon",
-                            tint = if (state.isAdvertising) KineticAccentBlue else KineticTextSecondary,
-                            modifier = Modifier.size(36.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (state.isAdvertising) "BROADCASTING" else "STANDBY",
-                            color = if (state.isAdvertising) KineticAccentBlue else KineticTextSecondary,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(if (state.isAdvertising) KineticAccentBlueTint else KineticSurfaceGhost)
+                                .border(1.dp, if (state.isAdvertising) KineticAccentBlue.copy(alpha = 0.3f) else KineticBorderSoft, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (state.isAdvertising) Icons.Default.Sensors else Icons.Default.SensorsOff,
+                                contentDescription = null,
+                                tint = if (state.isAdvertising) KineticAccentBlue else KineticTextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = if (state.isAdvertising) "Broadcasting Signal" else "Broadcaster Off",
+                                color = if (state.isAdvertising) KineticAccentBlue else KineticTextSecondary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = if (state.isAdvertising) "Active • Nearby stations can locate you" else "Offline • Turn on to share your details",
+                                color = KineticTextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Student Card Details Form
+        // Bento Section 2: Student Card Details & Form
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -472,7 +455,7 @@ fun BroadcasterTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "STUDENT IDENTITY",
+                        text = "YOUR PROFILE DETAILS",
                         color = KineticTextPrimary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -484,7 +467,7 @@ fun BroadcasterTab(
                     OutlinedTextField(
                         value = studentNameInput,
                         onValueChange = { studentNameInput = it },
-                        label = { Text("Student Name") },
+                        label = { Text("Your full name") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -504,7 +487,7 @@ fun BroadcasterTab(
                     OutlinedTextField(
                         value = studentIdInput,
                         onValueChange = { studentIdInput = it },
-                        label = { Text("Student ID Number") },
+                        label = { Text("Your registration number") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -522,7 +505,7 @@ fun BroadcasterTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "Attendance Status",
+                        text = "Broadcast Status Preference",
                         color = KineticTextSecondary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
@@ -587,7 +570,7 @@ fun BroadcasterTab(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = if (state.isAdvertising) Icons.Default.Stop else Icons.Default.CellTower,
+                                imageVector = if (state.isAdvertising) Icons.Default.Stop else Icons.Default.Bluetooth,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -604,7 +587,7 @@ fun BroadcasterTab(
             }
         }
 
-        // Broadcast Info / Bytes detail
+        // Bento Section 3: Simplified Info
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -612,43 +595,22 @@ fun BroadcasterTab(
                 colors = CardDefaults.cardColors(containerColor = KineticGlassMd),
                 border = BorderStroke(1.dp, KineticBorderSoft)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "BROADCAST PAYLOAD DATA (HEX)",
-                        color = KineticTextPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = KineticAccentBlue,
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val rawPayloadString = "$studentIdInput;$studentNameInput;$selectedStatus"
-                    val hexRepresentation = rawPayloadString.toByteArray(Charsets.UTF_8)
-                        .joinToString("") { "%02X ".format(it) }.trim()
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(KineticBackground, RoundedCornerShape(10.dp))
-                            .border(1.dp, KineticBorderSubtle, RoundedCornerShape(10.dp))
-                            .padding(12.dp)
-                    ) {
-                        Text(
-                            text = hexRepresentation.ifEmpty { "00" },
-                            color = KineticAccentBlue,
-                            fontSize = 11.sp,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "The app broadcasts your student parameters over standard Bluetooth LE advertising packets. Any nearby scanning teacher or receiver will automatically record your check-in.",
+                        text = "Once started, scanning teacher devices can automatically read your profile details to register your attendance log safely.",
                         color = KineticTextSecondary,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Normal
                     )
                 }
             }
@@ -957,49 +919,55 @@ fun SearchBar(
     )
 }
 
+private fun getSignalLabel(rssi: Int): String {
+    return when {
+        rssi >= -60 -> "Very Close"
+        rssi >= -75 -> "Nearby"
+        rssi >= -90 -> "Within range"
+        else -> "Weak signal"
+    }
+}
+
 @Composable
 fun RssiFilterControl(
     rssiFilter: Int,
     onRssiChange: (Int) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = KineticGlassBase),
-        border = BorderStroke(1.dp, KineticBorderSoft)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "SIGNAL STRENGTH FILTER",
-                    color = KineticTextSecondary,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = if (rssiFilter <= -100) "Show All" else ">= $rssiFilter dBm",
-                    color = KineticAccentBlue,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Slider(
-                value = rssiFilter.toFloat(),
-                onValueChange = { onRssiChange(it.toInt()) },
-                valueRange = -100f..-40f,
-                colors = SliderDefaults.colors(
-                    activeTrackColor = KineticAccentBlue,
-                    inactiveTrackColor = KineticBorderSoft,
-                    thumbColor = KineticForeground
-                )
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Show signals that are:",
+                color = KineticTextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+            Text(
+                text = when {
+                    rssiFilter <= -90 -> "All signals"
+                    rssiFilter <= -75 -> "Medium to strong"
+                    else -> "Only strong signals"
+                },
+                color = KineticAccentBlue,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
             )
         }
+        Spacer(modifier = Modifier.height(4.dp))
+        Slider(
+            value = rssiFilter.toFloat(),
+            onValueChange = { onRssiChange(it.toInt()) },
+            valueRange = -100f..-40f,
+            colors = SliderDefaults.colors(
+                activeTrackColor = KineticAccentBlue,
+                inactiveTrackColor = KineticBorderSoft,
+                thumbColor = KineticForeground
+            )
+        )
     }
 }
 
@@ -1101,7 +1069,7 @@ fun DeviceCard(
                                 modifier = Modifier
                                     .background(KineticAccentGreenTint, RoundedCornerShape(4.dp))
                                     .padding(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
+                             ) {
                                 Text("STUDENT", color = KineticAccentGreen, fontSize = 7.sp, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -1118,7 +1086,7 @@ fun DeviceCard(
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "${device.rssi} dBm",
+                    text = getSignalLabel(device.rssi),
                     color = KineticTextPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp

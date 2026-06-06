@@ -120,15 +120,6 @@ data class DetailScreen(val deviceMacAddress: String) : Screen {
                     )
                 }
 
-                // 2. Real-time RSSI Signal strength path graph
-                if (activeDevice != null) {
-                    item {
-                        RssiSignalPathGraph(
-                            signalHistory = activeDevice.signalHistory
-                        )
-                    }
-                }
-
                 // 3. User Personal Tags & Notes (Room Persistence UI)
                 item {
                     NotesPersistenceCard(
@@ -146,7 +137,7 @@ data class DetailScreen(val deviceMacAddress: String) : Screen {
                                     notesInput,
                                     categorySelected
                                 )
-                                Toast.makeText(context, "Note bookmarked securely!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Saved database record!", Toast.LENGTH_SHORT).show()
                             }
                         },
                         onClear = {
@@ -155,7 +146,7 @@ data class DetailScreen(val deviceMacAddress: String) : Screen {
                                 customNameInput = activeDevice?.name ?: ""
                                 notesInput = ""
                                 categorySelected = "Other"
-                                Toast.makeText(context, "Cleared databases record!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Cleared database record!", Toast.LENGTH_SHORT).show()
                             }
                         }
                     )
@@ -164,7 +155,7 @@ data class DetailScreen(val deviceMacAddress: String) : Screen {
                 // 4. GATT Services & Characteristics
                 item {
                     Text(
-                        text = "SERVICES & CHARACTERISTICS",
+                        text = "DEVICE DATA & SERVICES",
                         color = KineticTextSecondary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -248,6 +239,15 @@ fun DetailHeader(
     }
 }
 
+private fun getSignalLabel(rssi: Int): String {
+    return when {
+        rssi >= -60 -> "Very Close"
+        rssi >= -75 -> "Nearby"
+        rssi >= -90 -> "Within range"
+        else -> "Weak signal"
+    }
+}
+
 @Composable
 fun ConnectionStatsCard(
     device: BleDevice?,
@@ -294,7 +294,7 @@ fun ConnectionStatsCard(
                         letterSpacing = 0.5.sp
                     )
                     Text(
-                        text = if (isConnected) "Connected to GATT Server" else "Reading BLE services...",
+                        text = if (isConnected) "Active link established" else "Connecting to device...",
                         color = KineticTextSecondary,
                         fontSize = 11.sp
                     )
@@ -304,119 +304,15 @@ fun ConnectionStatsCard(
             if (device != null) {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "${device.rssi} dBm",
+                        text = getSignalLabel(device.rssi),
                         color = KineticTextPrimary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 13.sp
                     )
                     Text(
-                        text = "TX: ${device.txPower} dBm",
+                        text = "Signal strength",
                         color = KineticTextSecondary,
                         fontSize = 10.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun RssiSignalPathGraph(
-    signalHistory: List<Int>
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = KineticGlassBase),
-        border = BorderStroke(1.dp, KineticBorderSoft)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(
-                text = "SIGNAL STRENGTH HISTORY",
-                color = KineticTextSecondary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 10.sp,
-                letterSpacing = 1.sp
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Canvas drawing signal history path
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .background(KineticGlassMd, RoundedCornerShape(8.dp))
-                    .border(BorderStroke(1.dp, KineticBorderSubtle), RoundedCornerShape(8.dp))
-            ) {
-                if (signalHistory.isEmpty()) return@Canvas
-
-                val width = size.width
-                val height = size.height
-
-                // Draw coordinate scale lines
-                for (k in 1..3) {
-                    val y = height * (k / 4f)
-                    drawLine(
-                        color = KineticTextSecondary.copy(alpha = 0.04f),
-                        start = Offset(0f, y),
-                        end = Offset(width, y)
-                    )
-                }
-
-                val maxItems = 10
-                val items = signalHistory.takeLast(maxItems)
-                val stepX = width / (maxItems - 1)
-
-                // Render RSSI (-100 to -40) relative height
-                fun getCoordinateY(rssi: Int): Float {
-                    val fraction = ((rssi + 100) / 60.0f).coerceIn(0f, 1f)
-                    return height * (1.0f - fraction)
-                }
-
-                val path = Path()
-                items.forEachIndexed { idx, rssi ->
-                    val x = idx * stepX
-                    val y = getCoordinateY(rssi)
-                    if (idx == 0) {
-                        path.moveTo(x, y)
-                    } else {
-                        path.lineTo(x, y)
-                    }
-                }
-
-                // Smooth gradient fill below coordinate path line
-                val fillPath = Path().apply {
-                    addPath(path)
-                    // close the path loop
-                    lineTo((items.size - 1) * stepX, height)
-                    lineTo(0f, height)
-                    close()
-                }
-
-                // Draw gradient under trace
-                drawPath(
-                    path = fillPath,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(KineticAccentBlue.copy(alpha = 0.18f), Color.Transparent),
-                        startY = 0f,
-                        endY = height
-                    )
-                )
-
-                // Highlight trace path line
-                drawPath(
-                    path = path,
-                    color = KineticAccentBlue,
-                    style = Stroke(width = 3f)
-                )
-
-                // Draw active terminal node dots
-                items.forEachIndexed { idx, rssi ->
-                    drawCircle(
-                        color = Color.White,
-                        radius = 4f,
-                        center = Offset(idx * stepX, getCoordinateY(rssi))
                     )
                 }
             }
