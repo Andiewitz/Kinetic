@@ -1,0 +1,6 @@
+{
+  "name": "Kinetic",
+  "description": "Polished Bluetooth LE Scanner and Device Tracker built with Orbit MVI, Voyager, Room, DataStore, and Koin.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

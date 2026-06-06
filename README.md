@@ -1,11 +1,22 @@
-<div align="center">
+# Kinetic 📡
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+An elegant, high-fidelity **Bluetooth Low Energy (BLE) Scanner and Device Tracker** designed with a signature **Bento Grid** theme and built on modern Android development paradigms.
 
-  <h1>Built with AI Studio</h2>
+---
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## 🎨 Bento Design Theme
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+Kinetic leverages the Material Design 3 (M3) dynamic layout patterns to offer an intuitive visual dashboard reminiscent of modern hardware telemetry decks:
+- **Clean Grid Segments**: Segmented card units for device properties, telemetry stats, and custom sandboxing.
+- **Dynamic Color Accents**: Context-aware styling blocks for connected/unconnected states and RSSI categories.
+- **Micro-interactions**: Seamless smooth-scrolling logs, pulsing radar animations, and interactive drag-to-model range simulations.
 
-</div>
+---
+
+## 🛠️ Tech Stack & Architecture
+
+- **Jetpack Compose**: Declarative, responsive UI entirely modeled around modern container boundaries.
+- **Orbit MVI Framework**: Unidirectional data flow (UDF) structure guiding UI states, actions, and side effects.
+- **Room Database**: Local SQL caching and persistence for custom tags, classification names, and physical location notes.
+- **Voyager Navigation**: Secure state-saving, type-safe backstack transitions.
+- **Kotlin Coroutines**: Highly scalable asynchronous pipelines handling concurrent BLE background tasks and radar sweeps safely.
